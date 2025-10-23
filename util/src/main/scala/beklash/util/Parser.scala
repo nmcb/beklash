@@ -6,7 +6,7 @@ case class Parser[+A](parse: String => Option[(A,String)]):
     parse(s) match
       case Some(a,   "") => a
       case Some(_, rest) => sys.error(s"unconsumed at ${rest.take(10)}")
-      case None          => sys.error(s"failed to parse")
+      case None          => sys.error(s"failed to parse: '$s'")
 
   def map[B](f: A => B): Parser[B] =
     Parser(s => parse(s) match
@@ -63,6 +63,25 @@ object Parser:
 
   def digits: Parser[Int] =
     digit.oneOrMore.map(_.mkString("").toInt)
+
+  def string: Parser[String] =
+    satisfy(_.isLetter).oneOrMore.map(_.mkString(""))
+
+  def keyword(s: String): Parser[String] =
+    if s.isEmpty then
+      unit("")
+    else
+      for
+        _ <- char(s.head)
+        _ <- keyword(s.tail)
+      yield
+        s
+
+  def whitespace: Parser[String] =
+    satisfy(" \t\r\n\f".contains).oneOrMore.map(_.mkString)
+
+  def optionalWhitespace: Parser[String] =
+    satisfy(" \t\r\n\f".contains).zeroOrMore.map(_.mkString)
 
   def separated[A](sep: Char, pa: => Parser[A]): Parser[List[A]] =
     for { h <- pa ; t <- (char(sep) ~ pa).zeroOrMore } yield h :: t

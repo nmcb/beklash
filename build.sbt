@@ -19,7 +19,7 @@ lazy val alef = project
   .settings(
     name                 := "beklash-alef",
     scalaVersion         := scala3Version,
-    libraryDependencies ++= testDeps
+    libraryDependencies ++= testDeps,
   )
 
 lazy val root = project

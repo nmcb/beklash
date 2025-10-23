@@ -8,7 +8,7 @@ enum Model:
 
 extension (model: Model)
 
-  def interpret(input: Map[String,Int]): Int =
+  def interpret(input: Input): Output =
     import Model.*
     model match
       case Num(i) =>

@@ -19,3 +19,8 @@ class TestAlef extends AnyFunSuite:
     assertResult(Bin("+", Num(1), Num(2)))(parse(" ( + 1 2 ) "))
 
     assertResult(Bin("+", Bin("+", Var("a"), Num(2)), Bin("+", Num(2), Var("b"))))(parse("(+ (+ $a 2) (+ 2 $b))"))
+
+  test("Alef.service.call"):
+    val input = Map("a" -> 3, "b" -> 4)
+    assertResult(30)(Alef.service.call("service-a.model")(input))
+    assertResult(11)(Alef.service.call("service-b.model")(input))

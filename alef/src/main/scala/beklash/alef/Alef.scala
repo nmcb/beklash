@@ -3,8 +3,6 @@ package alef
 
 import beklash.util.*
 
-import java.nio.file.*
-
 type Input  = Map[String,Int]
 type Output = Int
 
@@ -64,7 +62,11 @@ object Alef extends App:
   def parse(s: String): Model =
     parser.run(s)
 
+  
+  // Alef service
+  
   lazy val service: Service =
+    import java.nio.file.*
     import java.net.*
     import scala.io.*
     import scala.jdk.CollectionConverters.*

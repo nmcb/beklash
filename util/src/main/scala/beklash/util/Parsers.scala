@@ -6,96 +6,107 @@ import scala.util.matching.Regex
 
 object Parsers:
 
-  type P[+A] = Location => Result[A]
+  type P[+A] = SrcPos => Result[A]
 
-  case class Location(input: String, offset: Int = 0):
+  case class SrcPos(source: String, offset: Int = 0):
 
     lazy val line: Int =
-      input.slice(0, offset + 1).count(_ == '\n') + 1
+      source.slice(0, offset + 1).count(_ == '\n') + 1
 
     lazy val col: Int =
-      input.slice(0, offset + 1).lastIndexOf('\n') match
-        case -1 => offset + 1
+      source.slice(0, offset + 1).lastIndexOf('\n') match
+        case -1        => offset + 1
         case lineStart => offset - lineStart
 
-    def toError(msg: String): ParseError =
-      ParseError(List((this, msg)))
+    def toError(msg: String): Error =
+      Error(List((this, msg)))
 
     def advanceBy(n: Int) =
       copy(offset = offset + n)
 
     def remaining: String =
-      input.substring(offset)
+      source.substring(offset)
 
     def slice(n: Int) =
-      input.substring(offset, offset + n)
+      source.substring(offset, offset + n)
 
     def currentLine: String =
-      if input.length > 1
-      then
-        val itr = input.linesIterator.drop(line - 1)
-        if (itr.hasNext) itr.next() else ""
+      if source.length > 1 then
+        val lines = source.linesIterator.drop(line - 1)
+        if lines.hasNext then
+          lines.next()
+        else ""
       else ""
 
     def columnCaret: String =
       (" " * (col - 1)) + "^"
 
-  case class ParseError(stack: List[(Location, String)] = Nil):
+  case class Error(stack: List[(SrcPos,String)] = Nil):
 
-    def push(loc: Location, msg: String): ParseError =
+    def push(loc: SrcPos, msg: String): Error =
       copy(stack = (loc, msg) :: stack)
 
-    def label(s: String): ParseError =
-      ParseError(latestLoc.map((_, s)).toList)
+    def label(s: String): Error =
+      Error(latestLoc.map((_, s)).toList)
 
-    def latest: Option[(Location, String)] =
+    def latest: Option[(SrcPos, String)] =
       stack.lastOption
 
-    def latestLoc: Option[Location] =
+    def latestLoc: Option[SrcPos] =
       latest map (_._1)
 
     override def toString =
       if stack.isEmpty then
         "no error message"
       else
-        val collapsed = collapseStack(stack)
-        val context =
-          collapsed.lastOption.map("\n\n" + _._1.currentLine).getOrElse("") +
-            collapsed.lastOption.map("\n" + _._1.columnCaret).getOrElse("")
-        collapsed.map((loc, msg) => s"${formatLoc(loc)} $msg").mkString("\n") + context
+        val collapsed: List[(SrcPos,String)] =
+          collapseStack(stack)
 
-    def collapseStack(s: List[(Location, String)]): List[(Location, String)] =
-      s.groupBy(_._1).
-        view.
-        mapValues(_.map(_._2).mkString("; ")).
-        toList.sortBy(_._1.offset)
+        val context: String =
+          collapsed.lastOption.map((p,_) => "\n\n" + p.currentLine).getOrElse("") +
+            collapsed.lastOption.map((p,_) => "\n" + p.columnCaret).getOrElse("")
 
-    def formatLoc(l: Location): String =
+        collapsed.map((p,m) => s"${formatLoc(p)} $m").mkString("\n") + context
+
+    def collapseStack(stack: List[(SrcPos,String)]): List[(SrcPos,String)] =
+      stack
+        .groupBy((p,_) => p)
+        .view
+        .mapValues(_.map((_,m) => m).mkString("; "))
+        .toList
+        .sortBy((p,_) => p.offset)
+
+    def formatLoc(l: SrcPos): String =
       s"${l.line}.${l.col}"
 
   enum Result[+A]:
     case Success(get: A, length: Int)
-    case Failure(get: ParseError, isCommitted: Boolean) extends Result[Nothing]
+    case Failure(get: Error, isCommitted: Boolean) extends Result[Nothing]
 
-    def extract: Either[ParseError, A] = this match
-      case Failure(e,_) => Left(e)
-      case Success(a,_) => Right(a)
+    def extract: Either[Error, A] =
+      this match
+        case Failure(e,_) => Left(e)
+        case Success(a,_) => Right(a)
 
-    def uncommit: Result[A] = this match
-      case Failure(e, true) => Failure(e, false)
-      case _ => this
+    def uncommit: Result[A] =
+      this match
+        case Failure(e, true) => Failure(e, false)
+        case _                => this
 
-    def addCommit(isCommitted: Boolean): Result[A] = this match
-      case Failure(e, c) => Failure(e, c || isCommitted)
-      case _ => this
+    def addCommit(isCommitted: Boolean): Result[A] =
+      this match
+        case Failure(e, c) => Failure(e, c || isCommitted)
+        case _             => this
 
-    def mapError(f: ParseError => ParseError): Result[A] = this match
-      case Failure(e, c) => Failure(f(e), c)
-      case _ => this
+    def mapError(f: Error => Error): Result[A] =
+      this match
+        case Failure(e, c) => Failure(f(e), c)
+        case _             => this
 
-    def advanceSuccess(n: Int): Result[A] = this match
-      case Success(a,m) => Success(a,n+m)
-      case _ => this
+    def advanceSuccess(n: Int): Result[A] =
+      this match
+        case Success(a,m) => Success(a,n+m)
+        case _            => this
 
   import Result.*
 
@@ -115,7 +126,7 @@ object Parsers:
 
   def string(w: String): P[String] =
     l =>
-      val i = firstNonmatchingIndex(l.input, w, l.offset)
+      val i = firstNonmatchingIndex(l.source, w, l.offset)
       if i == -1 then
         Success(w, w.length)
       else
@@ -123,7 +134,7 @@ object Parsers:
 
   def regex(r: Regex): P[String] =
     l => r.findPrefixOf(l.remaining) match
-      case None => Failure(l.toError(s"regex $r"), false)
+      case None    => Failure(l.toError(s"regex $r"), false)
       case Some(m) => Success(m, m.length)
 
   def fail(msg: String): P[Nothing] =
@@ -159,13 +170,13 @@ object Parsers:
 
   extension [A](p: P[A])
 
-    def run(s: String): Either[ParseError, A] =
-      p(Location(s)).extract
+    def run(s: String): Either[Error,A] =
+      p(SrcPos(s)).extract
 
     infix def or(p2: => P[A]): P[A] =
       l => p(l) match
         case Failure(e, false) => p2(l)
-        case r => r
+        case r                 => r
 
     def |(p2: => P[A]): P[A] =
       p or p2
@@ -175,15 +186,15 @@ object Parsers:
 
     def flatMap[B](f: A => P[B]): P[B] =
       l => p(l) match
-        case Success(a, n) =>
+        case Success(a,n) =>
           f(a)(l.advanceBy(n))
             .addCommit(n != 0)
             .advanceSuccess(n)
-        case f @ Failure(_, _) => f
+        case f @ Failure(_,_) => f
 
     def slice: P[String] =
       l => p(l) match
-        case Success(_, n) => Success(l.slice(n), n)
+        case Success(_, n)     => Success(l.slice(n), n)
         case f @ Failure(_, _) => f
 
     def many: P[List[A]] =
@@ -196,7 +207,7 @@ object Parsers:
               buf += a
               go(p, offset + n)
             case Failure(e, true) => Failure(e, true)
-            case Failure(_, _) => Success(buf.toList, offset)
+            case Failure(_, _)    => Success(buf.toList, offset)
         go(p, 0)
 
     def scope(msg: String): P[A] =
@@ -212,7 +223,7 @@ object Parsers:
     def map[B](f: A => B): P[B] =
       p.flatMap(f andThen succeed)
 
-    def map2[B, C](p2: => P[B])(f: (A, B) => C): P[C] =
+    def map2[B,C](p2: => P[B])(f: (A,B) => C): P[C] =
       p.product(p2).map((a, b) => f(a, b))
 
     def many1: P[List[A]] =
@@ -221,10 +232,10 @@ object Parsers:
     def opt: P[Option[A]] =
       p.map(Some(_)) | succeed(None)
 
-    def product[B](p2: => P[B]): P[(A, B)] =
+    def product[B](p2: => P[B]): P[(A,B)] =
       p.flatMap(a => p2.map(b => (a, b)))
 
-    def **[B](p2: => P[B]): P[(A, B)] =
+    def **[B](p2: => P[B]): P[(A,B)] =
       product(p2)
 
     def *>[B](p2: => P[B]) =
@@ -245,7 +256,7 @@ object Parsers:
     def as[B](b: B): P[B] =
       p.slice.map(_ => b)
 
-    def opL(op: P[(A, A) => A]): P[A] =
+    def opL(op: P[(A,A) => A]): P[A] =
       p.map2((op ** p).many)((h, t) => t.foldLeft(h)((a, b) => b._1(a, b._2)))
 
     def root: P[A] =

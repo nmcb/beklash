@@ -1,10 +1,17 @@
-package beklash.alef
+package beklash
+package alef
+
+import util.*
 
 import org.scalatest.funsuite.AnyFunSuite
 
 class TestModel extends AnyFunSuite:
 
-  import Alef.*
+  def parse(s: String): Model =
+    Alef.modelParser(ReferenceParser).run(s) match
+      case Left(e)  => sys.error(s"$e")
+      case Right(m) => m
+
 
   test("Model.interpret"):
     assertResult(expected = Right(0))(

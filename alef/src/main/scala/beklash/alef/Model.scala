@@ -1,7 +1,7 @@
 package beklash
 package alef
 
-type Value  = Int
+type Value  = Double
 type Name   = String
 type Input  = Map[Name, Value]
 type Error  = String

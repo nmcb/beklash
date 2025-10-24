@@ -7,58 +7,34 @@ object Alef extends App:
 
   import Model.*
 
-  // alef language parser
+  // Alef model parser
 
-  import Parser.*
+  def modelParser[Parser[+_]](P: Parsers[Parser]): Parser[Model] =
 
-  private def negativeNumber: Parser[Int] =
-    for
-      _ <- char('-')
-      i <- digits
-    yield
-      -i
+    import P.*
 
-  private def positiveNumber: Parser[Int] =
-    digits
+    def token(s: String) =
+      string(s).token
 
-  private def number: Parser[Val] =
-    for
-      _ <- optionalWhitespace
-      n <- negativeNumber | positiveNumber
-      _ <- optionalWhitespace
-    yield
-      Val(n)
+    def name: Parser[String] =
+      regex("[a-zA-Z_][a-zA-Z\\d_]*".r) <* whitespace
 
-  private def operation(o: String): Parser[Bin] =
-    for
-      _ <- optionalWhitespace
-      _ <- char('(')
-      _ <- optionalWhitespace
-      _ <- keyword(o)
-      a <- parser
-      _ <- optionalWhitespace
-      b <- parser
-      _ <- optionalWhitespace
-      _ <- char(')')
-      _ <- optionalWhitespace
-    yield
-      Bin(o, a, b)
+    def operation: Parser[String] =
+      regex("[+\\-*/]".r) <* whitespace
 
-  private def variable: Parser[Var] =
-    for
-      _ <- optionalWhitespace
-      _ <- char('$')
-      v <- string
-      _ <- optionalWhitespace
-    yield
-      Var(v)
+    def arg: Parser[Model] =
+      token("$") *> name.map(n => Var(n))
 
-  private def parser: Parser[Model] =
-    operation("+") | operation("-") | operation("*") | operation("/") | number | variable
+    def num: Parser[Model] =
+      double.map(d => Val(d))
 
-  def parse(s: String): Model =
-    parser.run(s)
+    def bin: Parser[Model] =
+      token("(") *> (operation ** (model ** model)).map((o,a) => Bin(o, a._1, a._2)) <* token(")")
 
+    def model: Parser[Model] =
+      bin | arg | num
+
+    (whitespace *> model <* whitespace).root
   
   // Alef service
   
@@ -88,7 +64,14 @@ object Alef extends App:
         .map: path =>
           val name = path.getFileName.toString
           val model = Source.fromInputStream(Files.newInputStream(path), "UTF-8").getLines.mkString
-          name -> Alef.parse(model)
+          name ->
+            Alef
+              .modelParser(ReferenceParser)
+              .run(model)
+              .fold(
+                error => sys.error(s"unable to parse: $path\n${error.toString}"),
+                identity
+              )
         .toMap
 
     Service(models)

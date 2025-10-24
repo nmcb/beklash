@@ -3,9 +3,6 @@ package alef
 
 import beklash.util.*
 
-type Input  = Map[String,Int]
-type Output = Int
-
 object Alef extends App:
 
   import Model.*
@@ -24,13 +21,13 @@ object Alef extends App:
   private def positiveNumber: Parser[Int] =
     digits
 
-  private def number: Parser[Num] =
+  private def number: Parser[Val] =
     for
       _ <- optionalWhitespace
       n <- negativeNumber | positiveNumber
       _ <- optionalWhitespace
     yield
-      Num(n)
+      Val(n)
 
   private def operation(o: String): Parser[Bin] =
     for

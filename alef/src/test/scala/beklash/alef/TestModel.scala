@@ -7,11 +7,16 @@ class TestModel extends AnyFunSuite:
   import Alef.*
 
   test("Model.interpret"):
-    assertResult(expected = 0)(
+    assertResult(expected = Right(0))(
       actual = parse("(- 10 (+ (* 3 2) (/ 8 2)))").interpret(
         Map.empty))
 
     assertResult(
-      expected = 0)(
+      expected = Right(0))(
       actual = parse("(- 10 (+ (* $a 2) (/ 8 $b)))").interpret(
         Map("a" -> 3, "b" -> 2)))
+
+    assertResult(
+      expected = Left("unresolved variable: b"))(
+      actual = parse("(- 10 (+ (* $a 2) (/ 8 $b)))").interpret(
+        Map("a" -> 3)))

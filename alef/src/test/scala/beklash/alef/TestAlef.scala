@@ -9,7 +9,7 @@ class TestAlef extends AnyFunSuite:
 
   import Model.*
 
-  test("Alef.parse"):
+  test("Alef.modelParser"):
     val parser = Alef.modelParser
     assertResult(
       expected = Right(Bin("+", Val(1), Val(2))))(

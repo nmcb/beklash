@@ -21,13 +21,13 @@ object Parsers:
     def toError(msg: String): Error =
       Error(List((this, msg)))
 
-    def advanceBy(n: Int) =
+    def advanceBy(n: Int): SrcPos =
       copy(offset = offset + n)
 
     def remaining: String =
       source.substring(offset)
 
-    def slice(n: Int) =
+    def slice(n: Int): String =
       source.substring(offset, offset + n)
 
     def currentLine: String =
@@ -49,13 +49,13 @@ object Parsers:
     def label(s: String): Error =
       Error(latestLoc.map((_, s)).toList)
 
-    def latest: Option[(SrcPos, String)] =
+    def latest: Option[(SrcPos,String)] =
       stack.lastOption
 
     def latestLoc: Option[SrcPos] =
       latest map (_._1)
 
-    override def toString =
+    override def toString: String =
       if stack.isEmpty then
         "no error message"
       else
@@ -199,7 +199,6 @@ object Parsers:
 
     def many: P[List[A]] =
       l =>
-        var nConsumed: Int = 0
         val buf = new collection.mutable.ListBuffer[A]
         def go(p: P[A], offset: Int): Result[List[A]] =
           p(l.advanceBy(offset)) match
@@ -217,8 +216,10 @@ object Parsers:
       l => p(l).mapError(_.label(msg))
 
     def listOfN(n: Int): P[List[A]] =
-      if n <= 0 then succeed(Nil)
-      else p.map2(p.listOfN(n - 1))(_ :: _)
+      if n <= 0 then
+        succeed(Nil)
+      else
+        p.map2(p.listOfN(n - 1))(_ :: _)
 
     def map[B](f: A => B): P[B] =
       p.flatMap(f andThen succeed)

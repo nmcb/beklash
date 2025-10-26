@@ -4,7 +4,7 @@ package alef
 import util.*
 
 object Alef extends App:
-  
+
   import Parsers.*
 
   lazy val modelParser: P[Model] =
@@ -15,7 +15,7 @@ object Alef extends App:
       string(s).token
 
     def name: P[String] =
-      regex("[a-zA-Z_][a-zA-Z\\d_]*".r) <* whitespace
+      regex("[a-zA-Z_][a-zA-Z\\d_-]*".r) <* whitespace
 
     def operation: P[String] =
       regex("[+\\-*/]".r) <* whitespace

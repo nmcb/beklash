@@ -15,12 +15,17 @@ object JsonPath:
   case class FilterUnion(l: JsonPath | Expression, r: JsonPath | Expression) extends Union
 
   trait Expression
-  case class Or(l: Expression, r: Expression)                          extends Expression
-  case class And(l: Expression, r: Expression)                         extends Expression
-  case class Equality(o: EqualityOp, l: Expression, r: Expression)     extends Expression
-  case class Relational(o: RelationalOp, l: Expression, r: Expression) extends Expression
-  case class Additive(o: AdditiveOp, l: Expression, r: Expression)     extends Expression
-  case class QualifiedPathExpression(p: JsonPath)                      extends Expression
+  case class  Or(l: Expression, r: Expression)                                  extends Expression
+  case class  And(l: Expression, r: Expression)                                 extends Expression
+  case class  Equality(o: EqualityOp, l: Expression, r: Expression)             extends Expression
+  case class  Relational(o: RelationalOp, l: Expression, r: Expression)         extends Expression
+  case class  Additive(o: AdditiveOp, l: Expression, r: Expression)             extends Expression
+  case class  Multiplicative(o: MultiplicativeOp, l: Expression, r: Expression) extends Expression
+  case class  QualifiedPathExpression(p: JsonPath)                              extends Expression
+  case class  NumberExpression(d: Double)                                       extends Expression
+  case class  StringExpression(s: String)                                       extends Expression
+  case class  BooleanExpression(b: Boolean)                                     extends Expression
+  case object NullExpression                                                    extends Expression
 
   sealed trait EqualityOp
   case object Equals        extends EqualityOp
@@ -43,151 +48,169 @@ object JsonPath:
   case object Modulus  extends MultiplicativeOp
 
   trait JsonPath
-  case object Nil                                                           extends JsonPath
-  case class Step(test: Test, predicate: Option[Predicate], tail: JsonPath) extends JsonPath
+  case object Nil              extends JsonPath
+  case class  Root(step: Step) extends JsonPath
+  case class  Step(test: JPTest, predicate: Option[Predicate], location: JPLocation, tail: JsonPath) extends JsonPath
 
-  trait Test
-  case object Object            extends Test
-  case object Array             extends Test
-  case object String            extends Test
-  case object Number            extends Test
-  case object Boolean           extends Test
-  case object Null              extends Test
-  case class Name(name: String) extends Test
+  enum JPLocation:
+    case Relative
+    case Recursive
+
+  enum JPTest:
+    case JPTypeTest(t: String) extends JPTest
+    case JPNameTest(n: String) extends JPTest
+
+  import JPTest.*
 
   import Parsers.*
 
   def jsonPathParser: P[JsonPath] =
+    path
 
-    def token(s: String) = string(s).token
+  def token(s: String) =
+    string(s).token
 
-    def path: P[JsonPath] =
-      absolutePath | relativePath
+  def path: P[JsonPath] =
+    absolutePath | relativePath
 
-    def absolutePath: P[JsonPath] =
-      token("$") *> qualifiedPath
+  def absolutePath: P[JsonPath] =
+    string("$") *> qualifiedPath.map(Root.apply)
 
-    def qualifiedPath: P[JsonPath] =
-      recursiveLocation | recursiveLocation
+  def qualifiedPath: P[Step] =
+    string(".") *> (
+      (string(".") *> relativePath).map(_.copy(location = JPLocation.Recursive))
+        | relativePath.map(_.copy(location = JPLocation.Relative))
+      )
 
-    def recursiveLocation: P[JsonPath] =
-      token("..") *> relativePath
+  def relativePath: P[Step] =
+    (step ** qualifiedPath.opt).map:
+      case ((test, predicate), Some(child)) => Step(test, predicate, JPLocation.Relative, child)
+      case ((test, predicate), None)        => Step(test, predicate, JPLocation.Relative, Nil)
 
-    def relativeLocation: P[JsonPath] =
-      token(".") *> relativePath
+  def step: P[(JPTest,Option[Predicate])] =
+      nodeTest ** predicate.opt
 
-    def relativePath: P[JsonPath] =
-      (step ** qualifiedPath).map:
-        case ((test, predicate), child) => Step(test, predicate, child)
+  def nodeTest: P[JPTest] =
+    nodeTypeTest | nameTest
 
-    def step: P[(Test,Option[Predicate])] =
-        (nodeTest ** predicate.opt)
+  private def nodeTypeTest: P[JPTest] =
+      string("object()").as(JPTypeTest("object"))
+      | string("array()").as(JPTypeTest("array"))
+      | string("string()").as(JPTypeTest("string"))
+      | string("boolean()").as(JPTypeTest("boolean"))
+      | string("nu") *> (
+        string("ll()").as(JPTypeTest("null"))
+        | string("mber()").as(JPTypeTest("number"))
+      )
 
-    def nodeTest: P[Test] =
-      (nodeType <* token("()")) | nameTest
+  private def nameTest: P[JPTest] =
+    (token("*") | name).map(JPNameTest.apply)
 
-    def nodeType: P[Test] =
-      token("object").as(Object)
-      | token("array").as(Array)
-      | token("string").as(String)
-      | token("number").as(Number)
-      | token("boolean").as(Boolean)
-      | token("null").as(Null)
+  def name: P[String] =
+    quoted('\'')
 
-    def nameTest: P[Test] =
-      (token("*") | name).map(Name.apply)
+  def predicate: P[Predicate] =
+    token("[") *> (wildcard | subscript | slice | union | filter) <* token("]")
 
-    def name: P[String] =
-        quoted('\'') *> regex("[^']+".r) <* quoted('\'')
+  def wildcard: P[Predicate] =
+    token("*").as(Wildcard)
 
-    def predicate: P[Predicate] =
-      token("[") *> (wildcard | subscript | slice | union | filter) <* token("]")
+  def subscript: P[Subscript] =
+    signedInteger.map(Subscript.apply)
 
-    def wildcard: P[Predicate] =
-      token("*").as(Wildcard)
+  def slice: P[Slice] =
+    def argument: P[Int] = token("[") *> signedInteger <* token("]")
+    (argument ** argument ** argument).map:
+      case ((from, to), step) => Slice(from, to, step)
 
-    def subscript: P[Subscript] =
-      signedInteger.map(Subscript.apply)
+  def union: P[Union] =
+    (integer ** token(",") ** integer).map:
+      case ((l,_),r) => SubscriptUnion(l, r)
+    | (unionExpression ** token(",") ** unionExpression).map:
+      case ((l,_),r) => FilterUnion(l, r)
 
-    def slice: P[Slice] =
-      def argument: P[Int] = token("[") *> signedInteger <* token("]")
-      (argument ** argument ** argument).map:
-        case ((from, to), step) => Slice(from, to, step)
+  def unionExpression: P[JsonPath | Expression] =
+    relativePath | filterExpression
 
-    def union: P[Union] =
-      (integer ** token(",") ** integer).map:
-        case ((l,_),r) => SubscriptUnion(l, r)
-      | (unionExpression ** token(",") ** unionExpression).map:
-        case ((l,_),r) => FilterUnion(l, r)
+  def filter: P[Filter] =
+    (token("?(") *> filterExpression <* token(")")).map(Filter.apply)
 
-    def unionExpression: P[JsonPath | Expression] =
-      relativePath | filterExpression
+  def filterExpression: P[Expression] =
+    orExpression
 
-    def filter: P[Filter] =
-      (token("?(") *> filterExpression <* token(")")).map(Filter.apply)
+  def orExpression: P[Expression] =
+    (andExpression ** (token("or") ** orExpression).opt).map:
+      case (l,Some((_,r))) => Or(l, r)
+      case (l,None)        => l
 
-    def filterExpression: P[Expression] =
-      orExpression
+  def andExpression: P[Expression] =
+    (equalityExpression ** (token("and") ** andExpression).opt).map:
+      case (l,Some((_,r))) => And(l, r)
+      case (l,None)        => l
 
-    def orExpression: P[Expression] =
-      (andExpression ** (token("or") ** orExpression).opt).map:
-        case (l,Some((_,r))) => Or(l, r)
-        case (l,None)        => l
+  def equalityExpression: P[Expression] =
+    (relationalExpression ** (equalityOp ** equalityExpression).opt).map:
+      case (l,Some(o,r)) => Equality(o, l, r)
+      case (l,None)      => l
 
-    def andExpression: P[Expression] =
-      (equalityExpression ** (token("and") ** andExpression).opt).map:
-        case (l,Some((_,r))) => And(l, r)
-        case (l,None)        => l
-
-    def equalityExpression: P[Expression] =
-      (relationalExpression ** (equalityOp ** equalityExpression).opt).map:
-        case (l,Some(o,r)) => Equality(o, l, r)
-        case (l,None)      => l
-
-    def equalityOp: P[EqualityOp] =
-      token("==").as(Equals) | token("!=").as(EqualsNot)
-
-
-    def relationalExpression: P[Expression] =
-      (additiveExpression ** (relationalOp ** relationalExpression).opt).map:
-        case (l,Some(o,r)) => Relational(o,l,r)
-        case (l,None)      => l
-
-    def relationalOp: P[RelationalOp] =
-      token(">").as(LargerThan)
-      | token("<").as(LessThan)
-      | token(">=").as(LargerOrEqualThan)
-      | token("<=").as(LessOrEqualThan)
-
-    def additiveExpression: P[Expression] =
-      (multiplicativeExpression ** (additiveOp ** additiveExpression).opt).map:
-        case (l,Some(o,r)) => Additive(o, l, r)
-        case (l,None)      => l
-
-    def additiveOp: P[AdditiveOp] =
-      token("+").as(Plus) | token("-").as(Minus)
-
-    def multiplicativeExpression: P[Expression] =
-      (unaryExpression ** (multiplicativeOp ** multiplicativeExpression).opt).map:
-        ???
-
-    def multiplicativeOp: P[MultiplicativeOp] =
-      token("*").as(Multiply) | token("/").as(Divide) | token("%").as(Modulus)
-
-    def unaryExpression: P[Expression] =
-      (token("@") *> qualifiedPath).map(QualifiedPathExpression.apply)
-      // TODO others
+  def equalityOp: P[EqualityOp] =
+    token("==").as(Equals) | token("!=").as(EqualsNot)
 
 
-    def signedInteger: P[Int] =
-      (token("-").opt ** integer).map:
-        case (Some("-"),i) => -i
-        case (_,i)         =>  i
+  def relationalExpression: P[Expression] =
+    (additiveExpression ** (relationalOp ** relationalExpression).opt).map:
+      case (l,Some(o,r)) => Relational(o,l,r)
+      case (l,None)      => l
 
-    def integer: P[Int] =
-      token("+").opt *> digits.map(_.toInt)
+  def relationalOp: P[RelationalOp] =
+    token(">").as(LargerThan)
+    | token("<").as(LessThan)
+    | token(">=").as(LargerOrEqualThan)
+    | token("<=").as(LessOrEqualThan)
 
-    ???
+  def additiveExpression: P[Expression] =
+    (multiplicativeExpression ** (additiveOp ** additiveExpression).opt).map:
+      case (l,Some(o,r)) => Additive(o, l, r)
+      case (l,None)      => l
+
+  def additiveOp: P[AdditiveOp] =
+    token("+").as(Plus) | token("-").as(Minus)
+
+  def multiplicativeExpression: P[Expression] =
+    (unaryExpression ** (multiplicativeOp ** multiplicativeExpression).opt).map:
+      case (l,Some(o,r)) => Multiplicative(o, l, r)
+      case (l,None)      => l
+
+  def multiplicativeOp: P[MultiplicativeOp] =
+    token("*").as(Multiply) | token("/").as(Divide) | token("%").as(Modulus)
+
+  def unaryExpression: P[Expression] =
+    (token("@") *> qualifiedPath).map(QualifiedPathExpression.apply)
+    | numberExpression
+    | stringExpression
+    | booleanExpression
+    | nullExpression
+
+  def numberExpression: P[NumberExpression] =
+    double.map(NumberExpression.apply)
+
+  def stringExpression: P[StringExpression] =
+    quoted('"').map(StringExpression.apply)
+
+  def booleanExpression: P[BooleanExpression] =
+    token("true").map(_ => BooleanExpression(true)) | token("false").map(_ => BooleanExpression(false))
+
+  def nullExpression: P[NullExpression.type] =
+    token("null").as(NullExpression)
+
+  def signedInteger: P[Int] =
+    (token("-").opt ** integer).map:
+      case (Some("-"),i) => -i
+      case (_,i)         =>  i
+
+  def integer: P[Int] =
+    token("+").opt *> digits.map(_.toInt)
+
 
   def fromString(s: String): Either[Parsers.Error,JsonPath] =
     jsonPathParser.run(s)

@@ -36,7 +36,7 @@ class TestJson extends AnyFunSuite:
             "ge" -> JBool(false),
             "gg" -> JObject(
               Map(
-                "gga" -> JString("b")
+                "gga" -> JString("bbb")
               )
             ),
             "gf" -> JArray(

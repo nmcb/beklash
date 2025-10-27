@@ -155,8 +155,8 @@ object Parsers:
   def thru(s: String): P[String] =
     regex((".*?" + Pattern.quote(s)).r)
 
-  def quoted: P[String] =
-    string("\"") *> thru("\"").map(_.dropRight(1))
+  def quoted(quote: Char): P[String] =
+    string(s"$quote") *> thru(s"$quote").map(_.dropRight(1))
 
   def doubleString: P[String] =
     regex("[-+]?([0-9]*\\.)?[0-9]+([eE][-+]?[0-9]+)?".r).token

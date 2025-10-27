@@ -26,12 +26,12 @@ object Json:
       ).scope("object")
 
     def member: P[(String, Json)] =
-      (quoted <* whitespace) ** (token(":") *> value <* whitespace)
+      (quoted('"') <* whitespace) ** (token(":") *> value <* whitespace)
 
     def literal: P[Json] =
       ( token("null").as(JNull)
       | double.map(JNumber(_))
-      | quoted.map(JString(_))
+      | quoted('"').map(JString(_))
       | token("true").as(JBool(true))
       | token("false").as(JBool(false))
       ).scope("literal")

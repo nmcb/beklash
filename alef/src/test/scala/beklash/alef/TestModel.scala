@@ -8,7 +8,7 @@ import org.scalatest.funsuite.AnyFunSuite
 class TestModel extends AnyFunSuite:
 
   def parse(s: String): Model =
-    Alef.modelParser(ReferenceParser).run(s) match
+    Alef.modelParser.run(s) match
       case Left(e)  => sys.error(s"$e")
       case Right(m) => m
 

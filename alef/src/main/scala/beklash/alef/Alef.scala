@@ -1,37 +1,35 @@
 package beklash
 package alef
 
-import beklash.util.*
+import util.*
 
 object Alef extends App:
 
-  import Model.*
+  import Parsers.*
 
-  // Alef model parser
+  lazy val modelParser: P[Model] =
 
-  def modelParser[Parser[+_]](P: Parsers[Parser]): Parser[Model] =
-
-    import P.*
+    import Model.*
 
     def token(s: String) =
       string(s).token
 
-    def name: Parser[String] =
-      regex("[a-zA-Z_][a-zA-Z\\d_]*".r) <* whitespace
+    def name: P[String] =
+      regex("[a-zA-Z_][a-zA-Z\\d_-]*".r) <* whitespace
 
-    def operation: Parser[String] =
+    def operation: P[String] =
       regex("[+\\-*/]".r) <* whitespace
 
-    def arg: Parser[Model] =
+    def arg: P[Model] =
       token("$") *> name.map(n => Var(n))
 
-    def num: Parser[Model] =
+    def num: P[Model] =
       double.map(d => Val(d))
 
-    def bin: Parser[Model] =
+    def bin: P[Model] =
       token("(") *> (operation ** (model ** model)).map((o,a) => Bin(o, a._1, a._2)) <* token(")")
 
-    def model: Parser[Model] =
+    def model: P[Model] =
       bin | arg | num
 
     (whitespace *> model <* whitespace).root
@@ -65,13 +63,9 @@ object Alef extends App:
           val name = path.getFileName.toString
           val model = Source.fromInputStream(Files.newInputStream(path), "UTF-8").getLines.mkString
           name ->
-            Alef
-              .modelParser(ReferenceParser)
-              .run(model)
-              .fold(
-                error => sys.error(s"unable to parse: $path\n${error.toString}"),
-                identity
-              )
+            modelParser.run(model).fold(
+              error => sys.error(s"unable to parse: $path\n${error.toString}"),
+              identity)
         .toMap
 
     Service(models)

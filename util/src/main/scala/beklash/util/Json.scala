@@ -26,7 +26,7 @@ object Json:
       ).scope("object")
 
     def member: P[(String, Json)] =
-      quoted ** (token(":") *> value)
+      (quoted <* whitespace) ** (token(":") *> value <* whitespace)
 
     def literal: P[Json] =
       ( token("null").as(JNull)
@@ -39,4 +39,7 @@ object Json:
     def value: P[Json] = literal | obj | arr
 
     (whitespace *> (obj | arr)).root
+
+  def fromString(s: String): Either[Parsers.Error,Json] =
+    jsonParser.run(s)
 

@@ -4,122 +4,107 @@ package util
 import util.*
 import org.scalatest.funsuite.AnyFunSuite
 
-import scala.io.*
-
 class TestJson extends AnyFunSuite:
 
   import Json.*
 
-  val stringJson: String =
-    Source.
-      fromResource("test-structure.json")
-      .mkString
-  
-  val expectedJson: Json =
-    JObject(
-      Map(
-        "a" -> JString("b"),
-        "c" -> JNull,
-        "d" -> JBool(true),
-        "e" -> JBool(false),
-        "f" -> JArray(
-          Vector(
-            JNumber(1.0),
-            JNumber(2.0),
-            JNumber(3.0))
-        ),
-        "g" -> JObject(
-          Map(
-            "ga" -> JString("bb"),
-            "gc" -> JNull,
-            "gd" -> JBool(true),
-            "ge" -> JBool(false),
-            "gg" -> JObject(
-              Map(
-                "gga" -> JString("bbb")
-              )
-            ),
-            "gf" -> JArray(
-              Vector(
-                JNumber(1.0),
-                JNumber(2.0),
-                JNumber(3.0)
-              )
-            )
-          )
+  test("Json.jsonParser"):
+
+    assertResult(
+      JArray(
+        Vector(
+          JString("foo"),
+          JNumber(666.0),
+          JBool(true),
+          JBool(false),
+          JNull,
+          JObject(Map.empty),
+          JArray(Vector.empty),
         )
       )
+    )( actual =
+      """[
+        |  "foo",
+        |  666,
+        |  true,
+        |  false,
+        |  null,
+        |  {},
+        |  []
+        |]
+        |""".stripMargin.asJson
     )
 
-  test("Json.jsonParser"):
-    val parser = Json.jsonParser
-    assertResult(Right(expectedJson))(actual = parser.run(stringJson))
-
-  test("Json.resolve"):
-    val json: Json =
+    assertResult(
       JObject(
         Map(
-          "a" -> JNull,
-          "b" -> JBool(true),
-          "c" -> JNumber(6.66),
-          "d" -> JString("foo"),
-          "e" -> JArray(
-            IndexedSeq(
-              /* index 0 */
-              JObject(Map.empty),
-              /* index 1 */
-              JObject(
-                Map(
-                  "aa" -> JNull,
-                  "bb" -> JBool(true),
-                  "cc" -> JNumber(3.33),
-                  "dd" -> JString("foo"),
-                  "ee" -> JArray(
-                    IndexedSeq(
-                      JString("e1ee0"),
-                      JString("e1ee1")
-                    )
-                  )
-                )
-              )
-            )
-          ),
-          "f" -> JObject(
-            Map(
-              /* key aaa */
-              "aaa" -> JObject(
-                Map(
-                  "aa" -> JNull,
-                  "bb" -> JBool(false),
-                  "cc" -> JNumber(6.66),
-                  "dd" -> JString("bar"),
-                  "ee" -> JArray(
-                    IndexedSeq(
-                      JString("faaaee0"),
-                      JString("faaaee1")
-                    )
-                  )
-                )
-              ),
-              /* key 666 */
-              "666" -> JObject(
-                Map(
-                  "aa" -> JNull,
-                  "bb" -> JBool(true),
-                  "cc" -> JNumber(9.99),
-                  "dd" -> JString("baz"),
-                  "ee" -> JArray(
-                    IndexedSeq(
-                      JString("f666ee0"),
-                      JString("f666ee1")
-                    )
-                  )
-                )
-              )
-            )
-          )
+          "a" -> JString("foo"),
+          "b" -> JNumber(666.0),
+          "c" -> JBool(true),
+          "d" -> JBool(false),
+          "e" -> JNull,
+          "f" -> JObject(Map.empty),
+          "g" -> JArray(Vector.empty)
         )
       )
+    )(actual =
+      """{
+        |  "a": "foo",
+        |  "b": 666,
+        |  "c": true,
+        |  "d": false,
+        |  "e": null,
+        |  "f": {},
+        |  "g": []
+        |}
+        |""".stripMargin.asJson
+    )
+
+  test("Json.resolve"):
+
+    val json: Json =
+      """{
+        |  "a": null,
+        |  "b": true,
+        |  "c": 6.66,
+        |  "d": "foo",
+        |  "e": [
+        |    {},
+        |    {
+        |      "aa": null,
+        |      "bb": true,
+        |      "cc": 3.33,
+        |      "dd": "foo",
+        |      "ee": [
+        |        "e1ee0",
+        |        "e1ee1"
+        |      ]
+        |    }
+        |  ],
+        |  "f": {
+        |    "666": {
+        |      "aa": null,
+        |      "bb": true,
+        |      "cc": 9.99,
+        |      "dd": "baz",
+        |      "ee": [
+        |        "f666ee0",
+        |        "f666ee1"
+        |      ]
+        |    },
+        |    "aaa": {
+        |      "aa": null,
+        |      "bb": false,
+        |      "cc": 6.66,
+        |      "dd": "bar",
+        |      "ee": [
+        |        "faaaee0",
+        |        "faaaee1"
+        |      ]
+        |    }
+        |  }
+        |}
+        |""".stripMargin.asJson
 
     assertResult(Some(json))
       (actual = json.resolve(JsonPointer("/")))
@@ -251,7 +236,7 @@ class TestJson extends AnyFunSuite:
     assertResult(None)
       (actual = json.resolve(JsonPointer("/f/2")))
 
-    
+
     import JsonPointer.Segment.*
     assertResult(Some(JNull))
       (actual = json.resolve(JsonPointer("/{v}/aaa/aa"), Map(Variable("v") -> Name("f"))))
@@ -270,4 +255,3 @@ class TestJson extends AnyFunSuite:
           )
         )
       )
-  

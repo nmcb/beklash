@@ -43,6 +43,9 @@ object Parsers:
 
   case class Error(stack: List[(SrcPos,String)] = Nil) extends Exception:
 
+    override def getMessage: String =
+      toString
+
     def push(loc: SrcPos, msg: String): Error =
       copy(stack = (loc, msg) :: stack)
 

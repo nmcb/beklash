@@ -24,7 +24,7 @@ lazy val alef = project
 
 lazy val root = project
   .in(file("."))
-  .aggregate(alef)
+  .aggregate(alef, util)
   .settings(
     name         := "beklash",
     version      := "0.1.0",

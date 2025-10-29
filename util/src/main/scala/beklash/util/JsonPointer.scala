@@ -1,42 +1,56 @@
 package beklash
 package util
 
-case class JsonPointer(path: List[String]):
+import JsonPointer.*
+import Segment.*
 
-  lazy val headOption: Option[String] =
+case class JsonPointer(path: List[Segment]):
+
+  def headOption: Option[Segment] =
     path.headOption
 
-  lazy val tail: JsonPointer =
+  def tail: JsonPointer =
     copy(path = path.tail)
-    
-  def resolve(json: Json): Option[Json] =
-    import Json.*
 
-    headOption match
-      case None =>
-        Some(json)
-      case Some(segment) =>
-        json match
-          case JArray(sequence) =>
-            segment
-              .toIntOption
-              .flatMap(sequence.lift)
-              .flatMap(tail.resolve)
-          case JObject(objects) =>
-            objects
-              .get(segment)
-              .flatMap(tail.resolve)
-          case _ =>
-            None
+  def variables: List[Segment] =
+    path.filter:
+      case v: Variable => true
+      case _           => false
+
+  def isNormalised: Boolean =
+    variables.isEmpty
+
+
+  def normalise(values: Map[Variable,Name]): Option[JsonPointer] =
+    val attempt = copy(path = path.map:
+      case v: Variable => values.getOrElse(v, v)
+      case s: Segment  => s
+    )
+    Option.when(attempt.isNormalised)(attempt)
 
 
 object JsonPointer:
+
+  def apply(path: String): JsonPointer =
+    jsonPointerParser.run(path).toTry.get
+
+  enum Segment(val name: String):
+    case Name(override val name: String)     extends Segment(name)
+    case Variable(override val name: String) extends Segment(name)
+
+  import Segment.*
 
   import Parsers.*
 
   def slash: P[Char] =
     char('/')
 
+  def variable: P[Segment] =
+    (char('{') *> regex("[^{}/]+".r) <* char('}')).map(Variable.apply)
+
+  def name: P[Segment] =
+    regex("[^{}/]+".r).map(Name.apply)
+
   def jsonPointerParser: P[JsonPointer] =
-    slash *> regex("[^/]+".r).sep(slash).map(JsonPointer.apply)
+    slash *> (variable | name).sep(slash).map(JsonPointer.apply)
 

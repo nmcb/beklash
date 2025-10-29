@@ -41,7 +41,7 @@ object Parsers:
     def columnCaret: String =
       (" " * (col - 1)) + "^"
 
-  case class Error(stack: List[(SrcPos,String)] = Nil):
+  case class Error(stack: List[(SrcPos,String)] = Nil) extends Exception:
 
     def push(loc: SrcPos, msg: String): Error =
       copy(stack = (loc, msg) :: stack)

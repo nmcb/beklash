@@ -8,6 +8,37 @@ enum Json:
   case JBool(get: Boolean)
   case JArray(get: IndexedSeq[Json])
   case JObject(get: Map[String,Json])
+  
+  import JsonPointer.*
+  import Segment.*
+
+  def resolve(pointer: JsonPointer, variables: Map[Variable,Name] = Map.empty): Option[Json] =
+
+    import Json.*
+    
+    def recurse(json: Json)(normalised: JsonPointer): Option[Json] =
+        normalised.headOption match
+          case None =>
+            Some(json)
+          case Some(segment) =>
+            json match
+              case JArray(sequence) =>
+                for 
+                  index <- segment.name.toIntOption 
+                  next  <- sequence.lift(index)
+                  value <- recurse(next)(normalised.tail)
+                yield
+                  value
+              case JObject(objects) =>
+                for 
+                  next  <- objects.get(segment.name)
+                  value <- recurse(next)(normalised.tail)
+                yield
+                  value
+              case _ =>
+                None
+
+    pointer.normalise(variables).flatMap(recurse(this))
 
 object Json:
 

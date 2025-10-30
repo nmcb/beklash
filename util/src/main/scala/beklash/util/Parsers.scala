@@ -41,7 +41,10 @@ object Parsers:
     def columnCaret: String =
       (" " * (col - 1)) + "^"
 
-  case class Error(stack: List[(SrcPos,String)] = Nil):
+  case class Error(stack: List[(SrcPos,String)] = Nil) extends Exception:
+
+    override def getMessage: String =
+      toString
 
     def push(loc: SrcPos, msg: String): Error =
       copy(stack = (loc, msg) :: stack)
@@ -155,8 +158,8 @@ object Parsers:
   def thru(s: String): P[String] =
     regex((".*?" + Pattern.quote(s)).r)
 
-  def quoted: P[String] =
-    string("\"") *> thru("\"").map(_.dropRight(1))
+  def quoted(quote: Char): P[String] =
+    string(s"$quote") *> thru(s"$quote").map(_.dropRight(1))
 
   def doubleString: P[String] =
     regex("[-+]?([0-9]*\\.)?[0-9]+([eE][-+]?[0-9]+)?".r).token

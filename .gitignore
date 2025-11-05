@@ -5,6 +5,7 @@ target
 /.bloop
 /.bsp
 /.DS_Store
+/.jvmopts
 /project/.bloop
 /project/project
 /project/metals.sbt

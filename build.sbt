@@ -32,3 +32,4 @@ lazy val root = project
   )
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
+
